@@ -4,5 +4,5 @@
   "domains": ["youversion"],
   "homeassistant": "2023.0.0",
   "render_readme": true,
-  "icon": "Icone_biblia.png"
+  "icon": "icone_biblia.png"
 }

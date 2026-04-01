@@ -7,6 +7,6 @@
   "requirements": [],
   "codeowners": ["@gugahdl"],
   "iot_class": "cloud_polling",
-  "integration_type": "service"
-  "icon": "icons/Ícone bíblia.png"
+  "integration_type": "service",
+  "icon": "Ícone bíblia.png"
 }

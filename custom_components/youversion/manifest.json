@@ -1,5 +1,5 @@
 {
-  "domain": "youversion",
+  "domain": "bible_api",
   "name": "Bible API / YouVersion",
   "version": "1.0.0",
   "documentation": "https://github.com/gugahdl/Bible-API",
@@ -7,6 +7,5 @@
   "requirements": [],
   "codeowners": ["@gugahdl"],
   "iot_class": "cloud_polling",
-  "integration_type": "service",
-  "icon": "icone_biblia.png"
+  "integration_type": "service"
 }

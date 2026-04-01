@@ -8,5 +8,5 @@
   "codeowners": ["@gugahdl"],
   "iot_class": "cloud_polling",
   "integration_type": "service",
-  "icon": "icone_biblia.png"
+  "icon": "icone.png"
 }

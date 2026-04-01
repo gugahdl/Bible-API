@@ -1,0 +1,17 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "YouVersion Bible API",
+        "description": "Enter your YouVersion Developer Token and preferred Bible version.",
+        "data": {
+          "token": "Developer Token",
+          "version": "Bible Version (e.g. nvi, arc, kjv)"
+        }
+      }
+    },
+    "error": {
+      "invalid_token": "Invalid YouVersion token."
+    }
+  }
+}

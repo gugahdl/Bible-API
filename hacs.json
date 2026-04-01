@@ -1,0 +1,7 @@
+{
+  "name": "Bible API - Home Assistant Integration",
+  "content_in_root": false,
+  "domains": ["youversion"],
+  "homeassistant": "2023.0.0",
+  "render_readme": true
+}

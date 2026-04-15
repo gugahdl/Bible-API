@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any
 
 import async_timeout
@@ -18,6 +17,7 @@ from homeassistant.helpers.update_coordinator import (
     DataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import (
     API_BASE_URL,
@@ -73,7 +73,7 @@ class YouVersionCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch the verse of the day from YouVersion."""
-        day = datetime.utcnow().timetuple().tm_yday
+        day = dt_util.now().timetuple().tm_yday
         url = f"{API_BASE_URL}/verse_of_the_day/{day}"
 
         headers = {

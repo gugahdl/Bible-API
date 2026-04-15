@@ -3,15 +3,38 @@
     "step": {
       "user": {
         "title": "YouVersion Bible API",
-        "description": "Enter your YouVersion Developer Token and preferred Bible version.",
+        "description": "Enter your YouVersion Developer Token, the numeric Bible version ID and the language for the verse text.",
         "data": {
           "token": "Developer Token",
-          "version": "Bible Version (e.g. nvi, arc, kjv)"
+          "version": "Bible Version ID (numeric, e.g. 1 = KJV, 111 = NIV, 129 = NVI-PT)",
+          "language": "Language code (e.g. en, pt, es)"
         }
       }
     },
     "error": {
-      "invalid_token": "Invalid YouVersion token."
+      "invalid_token": "Invalid YouVersion developer token.",
+      "invalid_version": "The specified Bible version ID was not found.",
+      "cannot_connect": "Could not connect to the YouVersion API."
+    },
+    "abort": {
+      "already_configured": "YouVersion is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "YouVersion Bible API",
+        "description": "Change the Bible version ID or language used for the Verse of the Day.",
+        "data": {
+          "version": "Bible Version ID (numeric)",
+          "language": "Language code"
+        }
+      }
+    },
+    "error": {
+      "invalid_token": "Stored developer token is no longer valid.",
+      "invalid_version": "The specified Bible version ID was not found.",
+      "cannot_connect": "Could not connect to the YouVersion API."
     }
   }
 }

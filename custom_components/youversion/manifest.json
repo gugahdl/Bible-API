@@ -1,11 +1,13 @@
 {
   "domain": "youversion",
   "name": "Bible API / YouVersion",
-  "version": "1.0.0",
+  "version": "1.1.0",
+  "config_flow": true,
   "documentation": "https://github.com/gugahdl/Bible-API",
   "issue_tracker": "https://github.com/gugahdl/Bible-API/issues",
   "dependencies": [],
+  "requirements": [],
   "codeowners": ["@gugahdl"],
   "iot_class": "cloud_polling",
-  "integration_type": "service"
+  "integration_type": "hub"
 }

@@ -49,7 +49,7 @@ https://github.com/gugahdl/Bible-API
 5. Install the integration  
 6. Go to **Settings → Devices & Services → Add Integration**  
 7. Search for **YouVersion Bible API**  
-8. Enter your **Developer Token** and preferred Bible version  
+8. Enter your **Developer Token**, the numeric **Bible version ID** (e.g. `1` = KJV, `111` = NIV, `129` = NVI-PT) and the **language code** (e.g. `en`, `pt`)  
 
 ---
 
@@ -76,7 +76,3 @@ automation:
 
 This project is licensed under the MIT License.  
 Bible content belongs to YouVersion and is used according to their Terms of Use.
-
----
-
-Se quiser, posso gerar também uma versão em português ou uma versão mais completa com badges, imagens e instruções avançadas.

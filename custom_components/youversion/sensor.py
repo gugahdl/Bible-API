@@ -1,7 +1,9 @@
 """Sensor platform for the YouVersion Bible API integration."""
 from __future__ import annotations
 
+import html as html_lib
 import logging
+import re
 from typing import Any
 
 import async_timeout
@@ -31,6 +33,27 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _verse_text(verse: dict[str, Any]) -> str:
+    """Return the best available plain-text rendering of the verse.
+
+    Some Bible versions omit the plain "text" field from the API and only
+    provide "html" (or vice versa). Falling back between the two avoids
+    leaving the attribute as None, which templates render as the literal
+    string "None".
+    """
+    text = verse.get("text")
+    if text:
+        return text
+
+    raw_html = verse.get("html")
+    if raw_html:
+        return html_lib.unescape(_TAG_RE.sub("", raw_html)).strip()
+
+    return ""
 
 
 async def async_setup_entry(
@@ -143,7 +166,7 @@ class YouVersionSensor(
         verse = data.get("verse") or {}
         image = data.get("image") or {}
         return {
-            "text": verse.get("text"),
+            "text": _verse_text(verse),
             "html": verse.get("html"),
             "reference": verse.get("human_reference"),
             "usfms": verse.get("usfms"),

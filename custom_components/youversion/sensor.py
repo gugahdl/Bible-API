@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html as html_lib
+import json
 import logging
 import re
 from typing import Any
@@ -112,19 +113,44 @@ class YouVersionCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 async with self._session.get(
                     url, headers=headers, params=params
                 ) as resp:
+                    raw_body = await resp.text()
                     if resp.status in (401, 403):
                         raise UpdateFailed(
                             f"Authentication failed (HTTP {resp.status})"
                         )
                     if resp.status >= 400:
                         raise UpdateFailed(
-                            f"YouVersion API returned HTTP {resp.status}"
+                            f"YouVersion API returned HTTP {resp.status}: "
+                            f"{raw_body[:500]}"
                         )
-                    return await resp.json()
         except ClientError as err:
             raise UpdateFailed(f"Error communicating with YouVersion: {err}") from err
         except TimeoutError as err:
             raise UpdateFailed("Timeout communicating with YouVersion") from err
+
+        try:
+            data = json.loads(raw_body)
+        except ValueError as err:
+            raise UpdateFailed(
+                f"YouVersion API returned invalid JSON: {raw_body[:500]}"
+            ) from err
+
+        verse = data.get("verse") if isinstance(data, dict) else None
+        if not verse or not verse.get("human_reference"):
+            _LOGGER.warning(
+                "YouVersion API returned no verse data for day %s / version_id "
+                "%s. This can happen if a rate limit/quota was hit. Raw "
+                "response: %s",
+                day,
+                self._version_id,
+                raw_body[:500],
+            )
+            raise UpdateFailed(
+                "YouVersion API returned no verse data (see log above for the "
+                "raw response)"
+            )
+
+        return data
 
 
 class YouVersionSensor(

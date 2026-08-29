@@ -1,13 +1,13 @@
 """Sensor platform for the YouVersion Bible API integration."""
 from __future__ import annotations
 
+import asyncio
 import html as html_lib
 import json
 import logging
 import re
 from typing import Any
 
-import async_timeout
 from aiohttp import ClientError
 
 from homeassistant.components.sensor import SensorEntity
@@ -24,9 +24,9 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     API_BASE_URL,
+    API_KEY_HEADER,
     API_USER_AGENT,
-    CONF_LANGUAGE,
-    CONF_TOKEN,
+    CONF_APP_KEY,
     CONF_VERSION,
     DEFAULT_UPDATE_INTERVAL,
     DEFAULT_VERSION_ID,
@@ -36,25 +36,14 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 _TAG_RE = re.compile(r"<[^>]+>")
+_REQUEST_TIMEOUT = 15
 
 
-def _verse_text(verse: dict[str, Any]) -> str:
-    """Return the best available plain-text rendering of the verse.
-
-    Some Bible versions omit the plain "text" field from the API and only
-    provide "html" (or vice versa). Falling back between the two avoids
-    leaving the attribute as None, which templates render as the literal
-    string "None".
-    """
-    text = verse.get("text")
-    if text:
-        return text
-
-    raw_html = verse.get("html")
-    if raw_html:
-        return html_lib.unescape(_TAG_RE.sub("", raw_html)).strip()
-
-    return ""
+def _strip_html(raw_html: str | None) -> str:
+    """Return a plain-text rendering of an HTML fragment."""
+    if not raw_html:
+        return ""
+    return html_lib.unescape(_TAG_RE.sub("", raw_html)).strip()
 
 
 async def async_setup_entry(
@@ -63,25 +52,25 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the YouVersion sensor from a config entry."""
-    token = entry.data[CONF_TOKEN]
-    version_id = int(entry.options.get(CONF_VERSION, DEFAULT_VERSION_ID))
-    language = entry.options.get(CONF_LANGUAGE, hass.config.language or "en")
+    hass.data.setdefault(DOMAIN, {})
 
-    coordinator = YouVersionCoordinator(hass, token, version_id, language)
+    app_key = entry.data[CONF_APP_KEY]
+    version_id = int(entry.options.get(CONF_VERSION, DEFAULT_VERSION_ID))
+
+    coordinator = YouVersionCoordinator(hass, app_key, version_id)
     await coordinator.async_config_entry_first_refresh()
 
     async_add_entities([YouVersionSensor(coordinator, entry, version_id)])
 
 
 class YouVersionCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Manages fetching data from the YouVersion API."""
+    """Fetches the verse of the day from the YouVersion Platform API."""
 
     def __init__(
         self,
         hass: HomeAssistant,
-        token: str,
+        app_key: str,
         version_id: int,
-        language: str,
     ) -> None:
         """Initialize the coordinator."""
         super().__init__(
@@ -90,41 +79,47 @@ class YouVersionCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name="YouVersion Bible API",
             update_interval=DEFAULT_UPDATE_INTERVAL,
         )
-        self._token = token
+        self._app_key = app_key
         self._version_id = version_id
-        self._language = language
         self._session = aiohttp_client.async_get_clientsession(hass)
 
-    async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch the verse of the day from YouVersion."""
-        day = dt_util.now().timetuple().tm_yday
-        url = f"{API_BASE_URL}/verse_of_the_day/{day}"
-
-        headers = {
-            "X-YouVersion-Developer-Token": self._token,
+    @property
+    def _headers(self) -> dict[str, str]:
+        return {
+            API_KEY_HEADER: self._app_key,
             "Accept": "application/json",
-            "Accept-Language": self._language,
             "User-Agent": API_USER_AGENT,
         }
-        params = {"version_id": str(self._version_id)}
 
+    async def _get_json(
+        self, path: str, params: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """GET ``path`` on the YouVersion API and return the parsed body."""
+        url = f"{API_BASE_URL}{path}"
         try:
-            async with async_timeout.timeout(15):
+            async with asyncio.timeout(_REQUEST_TIMEOUT):
                 async with self._session.get(
-                    url, headers=headers, params=params
+                    url, headers=self._headers, params=params
                 ) as resp:
                     raw_body = await resp.text()
                     if resp.status in (401, 403):
                         raise UpdateFailed(
-                            f"Authentication failed (HTTP {resp.status})"
+                            f"YouVersion rejected the app key (HTTP {resp.status}). "
+                            "Check the App Key in the integration options."
+                        )
+                    if resp.status == 429:
+                        raise UpdateFailed(
+                            "YouVersion rate limit reached (HTTP 429)"
                         )
                     if resp.status >= 400:
                         raise UpdateFailed(
-                            f"YouVersion API returned HTTP {resp.status}: "
-                            f"{raw_body[:500]}"
+                            f"YouVersion API returned HTTP {resp.status} for "
+                            f"{path}: {raw_body[:300]}"
                         )
         except ClientError as err:
-            raise UpdateFailed(f"Error communicating with YouVersion: {err}") from err
+            raise UpdateFailed(
+                f"Error communicating with YouVersion: {err}"
+            ) from err
         except TimeoutError as err:
             raise UpdateFailed("Timeout communicating with YouVersion") from err
 
@@ -132,25 +127,58 @@ class YouVersionCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             data = json.loads(raw_body)
         except ValueError as err:
             raise UpdateFailed(
-                f"YouVersion API returned invalid JSON: {raw_body[:500]}"
+                f"YouVersion API returned invalid JSON for {path}: "
+                f"{raw_body[:300]}"
             ) from err
 
-        verse = data.get("verse") if isinstance(data, dict) else None
-        if not verse or not verse.get("human_reference"):
-            _LOGGER.warning(
-                "YouVersion API returned no verse data for day %s / version_id "
-                "%s. This can happen if a rate limit/quota was hit. Raw "
-                "response: %s",
-                day,
-                self._version_id,
-                raw_body[:500],
-            )
+        if not isinstance(data, dict):
             raise UpdateFailed(
-                "YouVersion API returned no verse data (see log above for the "
-                "raw response)"
+                f"YouVersion API returned an unexpected payload for {path}: "
+                f"{raw_body[:300]}"
+            )
+        return data
+
+    async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch today's verse: reference -> passage text (+ html)."""
+        day = dt_util.now().timetuple().tm_yday
+
+        # 1) Which passage is the verse of the day for this day-of-year.
+        votd = await self._get_json(f"/verse_of_the_days/{day}")
+        passage_id = votd.get("passage_id")
+        if not passage_id:
+            raise UpdateFailed(
+                f"YouVersion returned no passage_id for day {day}: {votd}"
             )
 
-        return data
+        # 2) The passage text in the selected Bible version.
+        text_resp = await self._get_json(
+            f"/bibles/{self._version_id}/passages/{passage_id}",
+            params={"format": "text"},
+        )
+
+        # 3) HTML rendering is a nice-to-have; don't fail the update on it.
+        html_content: str | None = None
+        try:
+            html_resp = await self._get_json(
+                f"/bibles/{self._version_id}/passages/{passage_id}",
+                params={"format": "html"},
+            )
+            html_content = html_resp.get("content")
+        except UpdateFailed as err:
+            _LOGGER.debug(
+                "Could not fetch HTML rendering for %s: %s", passage_id, err
+            )
+
+        text_content = text_resp.get("content") or _strip_html(html_content)
+
+        return {
+            "day": day,
+            "passage_id": passage_id,
+            "reference": text_resp.get("reference"),
+            "text": text_content,
+            "html": html_content,
+            "version_id": self._version_id,
+        }
 
 
 class YouVersionSensor(
@@ -178,27 +206,29 @@ class YouVersionSensor(
     def native_value(self) -> str | None:
         """Return the verse reference as the state.
 
-        The state is limited to 255 characters in Home Assistant, and verses
-        can exceed that, so we expose the short reference as the state and
-        the full text as an attribute.
+        The state is limited to 255 characters in Home Assistant and verses
+        can exceed that, so the short reference is the state and the full
+        text is exposed as an attribute.
         """
-        verse = (self.coordinator.data or {}).get("verse") or {}
-        return verse.get("human_reference")
+        data = self.coordinator.data or {}
+        reference = data.get("reference")
+        return reference[:255] if reference else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return additional attributes."""
         data = self.coordinator.data or {}
-        verse = data.get("verse") or {}
-        image = data.get("image") or {}
+        passage_id = data.get("passage_id")
         return {
-            "text": _verse_text(verse),
-            "html": verse.get("html"),
-            "reference": verse.get("human_reference"),
-            "usfms": verse.get("usfms"),
-            "url": verse.get("url"),
-            "image_url": image.get("url"),
-            "image_attribution": image.get("attribution"),
+            "text": data.get("text"),
+            "html": data.get("html"),
+            "reference": data.get("reference"),
+            "passage_id": passage_id,
             "day": data.get("day"),
             "version_id": self._version_id,
+            "url": (
+                f"https://www.bible.com/bible/{self._version_id}/{passage_id}"
+                if passage_id
+                else None
+            ),
         }

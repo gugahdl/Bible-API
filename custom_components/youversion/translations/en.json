@@ -3,25 +3,25 @@
     "step": {
       "user": {
         "title": "YouVersion Bible API",
-        "description": "Enter your YouVersion Developer Token. You can get one for free at https://developers.youversion.com",
+        "description": "Enter your YouVersion Platform App Key. Create a free developer account and register an application at https://developers.youversion.com to get one, then pick the language you want Bible versions listed in.",
         "data": {
-          "token": "Developer Token"
+          "app_key": "App Key",
+          "language": "Language"
         }
       },
       "select": {
-        "title": "Bible version and language",
-        "description": "Choose the Bible version you want to use for the Verse of the Day and the language for localized content.",
+        "title": "Bible version",
+        "description": "Choose the Bible version used for the Verse of the Day. The list shows the versions enabled for your App Key in the selected language.",
         "data": {
-          "version": "Bible version",
-          "language": "Language"
+          "version": "Bible version"
         }
       }
     },
     "error": {
-      "invalid_token": "Invalid YouVersion developer token.",
+      "invalid_app_key": "Invalid YouVersion App Key.",
       "invalid_version": "The selected Bible version is not valid.",
       "cannot_connect": "Could not connect to the YouVersion API.",
-      "no_versions": "No Bible versions were returned by the API."
+      "no_versions": "No Bible versions were returned for this App Key and language. Try a different language code."
     },
     "abort": {
       "already_configured": "YouVersion is already configured."
@@ -39,7 +39,7 @@
       }
     },
     "error": {
-      "invalid_token": "The stored developer token is no longer valid.",
+      "invalid_app_key": "The stored App Key is no longer valid.",
       "invalid_version": "The selected Bible version is not valid.",
       "cannot_connect": "Could not connect to the YouVersion API."
     }

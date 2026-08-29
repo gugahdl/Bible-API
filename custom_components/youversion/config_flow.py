@@ -8,9 +8,12 @@ import voluptuous as vol
 from aiohttp import ClientError
 
 from homeassistant import config_entries
-from homeassistant.config_entries import ConfigEntry, OptionsFlow
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import aiohttp_client
 from homeassistant.helpers.selector import (
     SelectSelector,
@@ -20,55 +23,69 @@ from homeassistant.helpers.selector import (
 
 from .const import (
     API_BASE_URL,
+    API_KEY_HEADER,
     API_USER_AGENT,
     COMMON_LANGUAGES,
+    CONF_APP_KEY,
     CONF_LANGUAGE,
-    CONF_TOKEN,
     CONF_VERSION,
+    DEFAULT_LANGUAGE_RANGE,
     DEFAULT_VERSION_ID,
     DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-_MAX_VERSION_PAGES = 50
+_MAX_BIBLE_PAGES = 20
+_PAGE_SIZE = 99
 
 
 class InvalidAuth(Exception):
-    """Raised when the YouVersion API rejects the token."""
+    """Raised when the YouVersion API rejects the app key."""
 
 
 class CannotConnect(Exception):
     """Raised when the YouVersion API cannot be reached."""
 
 
-async def _fetch_versions(
-    hass: HomeAssistant, token: str, language: str
+async def _fetch_bibles(
+    hass: HomeAssistant, app_key: str, language_range: str
 ) -> list[dict[str, Any]]:
-    """Fetch the full list of Bible versions from the YouVersion API."""
+    """Return the list of Bibles enabled for this app key in ``language_range``.
+
+    Calls ``GET /v1/bibles`` on the YouVersion Platform API, following
+    ``next_page_token`` pagination.
+    """
     session = aiohttp_client.async_get_clientsession(hass)
     headers = {
-        "X-YouVersion-Developer-Token": token,
+        API_KEY_HEADER: app_key,
         "Accept": "application/json",
-        "Accept-Language": language,
         "User-Agent": API_USER_AGENT,
     }
 
-    versions: list[dict[str, Any]] = []
-    page = 1
+    bibles: list[dict[str, Any]] = []
+    page_token: str | None = None
 
-    while page <= _MAX_VERSION_PAGES:
+    for _ in range(_MAX_BIBLE_PAGES):
+        params: list[tuple[str, str]] = [
+            ("language_ranges[]", language_range),
+            ("page_size", str(_PAGE_SIZE)),
+        ]
+        if page_token:
+            params.append(("page_token", page_token))
+
         try:
             async with session.get(
-                f"{API_BASE_URL}/versions",
-                headers=headers,
-                params={"page": str(page)},
+                f"{API_BASE_URL}/bibles", headers=headers, params=params
             ) as resp:
                 if resp.status in (401, 403):
                     raise InvalidAuth
                 if resp.status >= 400:
+                    text = await resp.text()
                     _LOGGER.warning(
-                        "Unexpected status %s from YouVersion /versions", resp.status
+                        "Unexpected status %s from YouVersion /bibles: %s",
+                        resp.status,
+                        text[:300],
                     )
                     raise CannotConnect
                 body = await resp.json()
@@ -76,35 +93,36 @@ async def _fetch_versions(
             _LOGGER.warning("Error contacting YouVersion API: %s", err)
             raise CannotConnect from err
 
-        versions.extend(body.get("data") or [])
-        if not body.get("next_page"):
+        bibles.extend(body.get("data") or [])
+        page_token = body.get("next_page_token")
+        if not page_token:
             break
-        page += 1
 
-    return versions
+    return bibles
+
+
+def _bible_label(bible: dict[str, Any]) -> str:
+    """Build a human-readable label for a Bible entry."""
+    title = (
+        bible.get("localized_title")
+        or bible.get("title")
+        or f"Bible {bible.get('id')}"
+    )
+    abbreviation = (
+        bible.get("localized_abbreviation") or bible.get("abbreviation") or ""
+    )
+    return f"{title} ({abbreviation})" if abbreviation else title
 
 
 def _build_version_options(
-    versions: list[dict[str, Any]]
+    bibles: list[dict[str, Any]]
 ) -> list[dict[str, str]]:
-    """Turn the raw versions list into selector options."""
-
-    def label(version: dict[str, Any]) -> str:
-        title = version.get("local_title") or version.get("title") or "Unknown"
-        abbreviation = (
-            version.get("local_abbreviation")
-            or version.get("abbreviation")
-            or ""
-        )
-        if abbreviation:
-            return f"{title} ({abbreviation})"
-        return title
-
+    """Turn the raw bibles list into selector options."""
     return sorted(
         (
-            {"value": str(version["id"]), "label": label(version)}
-            for version in versions
-            if version.get("id") is not None
+            {"value": str(bible["id"]), "label": _bible_label(bible)}
+            for bible in bibles
+            if bible.get("id") is not None
         ),
         key=lambda option: option["label"].lower(),
     )
@@ -125,81 +143,44 @@ class YouVersionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialize the config flow."""
-        self._token: str | None = None
-        self._versions: list[dict[str, Any]] = []
+        self._app_key: str | None = None
+        self._language: str = DEFAULT_LANGUAGE_RANGE
+        self._bibles: list[dict[str, Any]] = []
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Ask the user for the developer token."""
+    ) -> ConfigFlowResult:
+        """Ask for the app key and language, then validate against the API."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
             await self.async_set_unique_id(DOMAIN)
             self._abort_if_unique_id_configured()
 
-            token = user_input[CONF_TOKEN]
-            language = self.hass.config.language or "en"
+            app_key = user_input[CONF_APP_KEY].strip()
+            language = (
+                user_input[CONF_LANGUAGE].strip() or DEFAULT_LANGUAGE_RANGE
+            )
             try:
-                versions = await _fetch_versions(self.hass, token, language)
+                bibles = await _fetch_bibles(self.hass, app_key, language)
             except InvalidAuth:
-                errors["base"] = "invalid_token"
+                errors["base"] = "invalid_app_key"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             else:
-                if not versions:
+                if not bibles:
                     errors["base"] = "no_versions"
                 else:
-                    self._token = token
-                    self._versions = versions
+                    self._app_key = app_key
+                    self._language = language
+                    self._bibles = bibles
                     return await self.async_step_select()
-
-        schema = vol.Schema({vol.Required(CONF_TOKEN): str})
-        return self.async_show_form(
-            step_id="user", data_schema=schema, errors=errors
-        )
-
-    async def async_step_select(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
-        """Let the user pick the Bible version and language."""
-        errors: dict[str, str] = {}
-
-        if user_input is not None:
-            try:
-                version_id = int(user_input[CONF_VERSION])
-            except (TypeError, ValueError):
-                errors["base"] = "invalid_version"
-            else:
-                assert self._token is not None
-                return self.async_create_entry(
-                    title="YouVersion Bible API",
-                    data={CONF_TOKEN: self._token},
-                    options={
-                        CONF_VERSION: version_id,
-                        CONF_LANGUAGE: user_input[CONF_LANGUAGE],
-                    },
-                )
-
-        version_options = _build_version_options(self._versions)
-        default_version = (
-            str(DEFAULT_VERSION_ID)
-            if any(opt["value"] == str(DEFAULT_VERSION_ID) for opt in version_options)
-            else version_options[0]["value"]
-        )
-        default_language = self.hass.config.language or "en"
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_VERSION, default=default_version): SelectSelector(
-                    SelectSelectorConfig(
-                        options=version_options,
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=False,
-                    )
-                ),
+                vol.Required(CONF_APP_KEY): str,
                 vol.Required(
-                    CONF_LANGUAGE, default=default_language
+                    CONF_LANGUAGE, default=DEFAULT_LANGUAGE_RANGE
                 ): SelectSelector(
                     SelectSelectorConfig(
                         options=_language_options(),
@@ -209,7 +190,52 @@ class YouVersionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ),
             }
         )
+        return self.async_show_form(
+            step_id="user", data_schema=schema, errors=errors
+        )
 
+    async def async_step_select(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Let the user pick the Bible version."""
+        errors: dict[str, str] = {}
+        version_options = _build_version_options(self._bibles)
+
+        if user_input is not None:
+            try:
+                version_id = int(user_input[CONF_VERSION])
+            except (TypeError, ValueError):
+                errors["base"] = "invalid_version"
+            else:
+                assert self._app_key is not None
+                return self.async_create_entry(
+                    title="YouVersion Bible API",
+                    data={CONF_APP_KEY: self._app_key},
+                    options={
+                        CONF_VERSION: version_id,
+                        CONF_LANGUAGE: self._language,
+                    },
+                )
+
+        default_version = (
+            str(DEFAULT_VERSION_ID)
+            if any(opt["value"] == str(DEFAULT_VERSION_ID) for opt in version_options)
+            else version_options[0]["value"]
+        )
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_VERSION, default=default_version
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=version_options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=False,
+                    )
+                )
+            }
+        )
         return self.async_show_form(
             step_id="select", data_schema=schema, errors=errors
         )
@@ -218,20 +244,19 @@ class YouVersionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
         """Return the options flow handler."""
-        return YouVersionOptionsFlow(config_entry)
+        return YouVersionOptionsFlow()
 
 
 class YouVersionOptionsFlow(OptionsFlow):
     """Handle options for the YouVersion Bible API."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
+    def __init__(self) -> None:
         """Initialize options flow."""
-        self.config_entry = config_entry
-        self._versions: list[dict[str, Any]] = []
+        self._bibles: list[dict[str, Any]] = []
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Show version/language dropdowns fetched from the API."""
         errors: dict[str, str] = {}
 
@@ -239,7 +264,7 @@ class YouVersionOptionsFlow(OptionsFlow):
             CONF_VERSION, DEFAULT_VERSION_ID
         )
         current_language = self.config_entry.options.get(
-            CONF_LANGUAGE, self.hass.config.language or "en"
+            CONF_LANGUAGE, DEFAULT_LANGUAGE_RANGE
         )
 
         if user_input is not None:
@@ -252,23 +277,26 @@ class YouVersionOptionsFlow(OptionsFlow):
                     title="",
                     data={
                         CONF_VERSION: version_id,
-                        CONF_LANGUAGE: user_input[CONF_LANGUAGE],
+                        CONF_LANGUAGE: (
+                            user_input[CONF_LANGUAGE].strip()
+                            or DEFAULT_LANGUAGE_RANGE
+                        ),
                     },
                 )
 
-        if not self._versions:
+        if not self._bibles:
             try:
-                self._versions = await _fetch_versions(
+                self._bibles = await _fetch_bibles(
                     self.hass,
-                    self.config_entry.data[CONF_TOKEN],
+                    self.config_entry.data[CONF_APP_KEY],
                     current_language,
                 )
             except InvalidAuth:
-                errors["base"] = "invalid_token"
+                errors["base"] = "invalid_app_key"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
 
-        version_options = _build_version_options(self._versions)
+        version_options = _build_version_options(self._bibles)
 
         # If the fetch failed, still show a usable form with the current value
         # so the user isn't fully locked out.
@@ -288,7 +316,9 @@ class YouVersionOptionsFlow(OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_VERSION, default=default_version): SelectSelector(
+                vol.Required(
+                    CONF_VERSION, default=default_version
+                ): SelectSelector(
                     SelectSelectorConfig(
                         options=version_options,
                         mode=SelectSelectorMode.DROPDOWN,

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Open book with the word BIBLE">
+  <g stroke-linejoin="round" stroke-linecap="round">
+    <!-- bookmark ribbon (behind the pages) -->
+    <polygon points="238,150 274,150 274,470 256,452 238,470" fill="#b73c4a"/>
+    <!-- page stack -->
+    <path d="M64 300 L256 320 L448 300 M64 312 L256 332 L448 312" fill="none" stroke="#e7decf" stroke-width="9"/>
+    <!-- pages -->
+    <polygon points="256,120 64,92 64,300 256,320" fill="#ffffff" stroke="#78482f" stroke-width="9"/>
+    <polygon points="256,120 448,92 448,300 256,320" fill="#ffffff" stroke="#78482f" stroke-width="9"/>
+    <line x1="256" y1="120" x2="256" y2="320" stroke="#78482f" stroke-width="9"/>
+    <!-- word -->
+    <text x="256" y="222" text-anchor="middle" dominant-baseline="middle"
+          font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="96"
+          fill="#78482f" stroke="#ffffff" stroke-width="7" paint-order="stroke">BIBLE</text>
+  </g>
+</svg>

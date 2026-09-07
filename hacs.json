@@ -1,7 +1,6 @@
 {
-  "name": "Bible API - Home Assistant Integration",
+  "name": "Bible Verse of the Day",
   "content_in_root": false,
-  "domains": ["youversion"],
-  "homeassistant": "2023.0.0",
+  "homeassistant": "2024.4.0",
   "render_readme": true
 }

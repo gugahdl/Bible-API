@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bible Verse of the Day",
+        "description": "Enter your YouVersion Platform App Key. Create a free developer account and register an application at https://developers.youversion.com to get one, then pick the language you want Bible versions listed in. You'll pick the version(s) to track on the next screen -- you only enter the App Key here, once.",
+        "data": {
+          "app_key": "App Key",
+          "language": "Language"
+        }
+      },
+      "select": {
+        "title": "Bible version(s)",
+        "description": "Choose one or more Bible versions to track. The list shows the versions enabled for your App Key in the selected language. Each version becomes its own device with its own Verse of the Day sensor. You can add or remove versions later from this integration's Configure button, without re-entering the App Key.",
+        "data": {
+          "version": "Bible version(s)"
+        }
+      }
+    },
+    "error": {
+      "invalid_app_key": "Invalid YouVersion App Key.",
+      "invalid_version": "The selected Bible version is not valid.",
+      "cannot_connect": "Could not connect to the YouVersion API.",
+      "no_versions": "No Bible versions were returned for this App Key and language. Try a different language code.",
+      "no_selection": "Pick at least one Bible version.",
+      "version_in_use": "One of the selected versions is already tracked by another entry. Remove it there first, or pick a different version here."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Bible Verse of the Day",
+        "description": "Add, remove, or change the Bible versions (and language) tracked by this entry. The App Key stays the same -- no need to re-enter it.",
+        "data": {
+          "version": "Bible version(s)",
+          "language": "Language"
+        }
+      }
+    },
+    "error": {
+      "invalid_app_key": "The stored App Key is no longer valid.",
+      "invalid_version": "The selected Bible version is not valid.",
+      "cannot_connect": "Could not connect to the YouVersion API.",
+      "no_selection": "Pick at least one Bible version.",
+      "version_in_use": "One of the selected versions is already tracked by another entry. Remove it there first, or pick a different version here."
+    }
+  }
+}

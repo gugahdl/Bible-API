@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/31894173/README.md)<p align="center">
+<p align="center">
   <img src="https://raw.githubusercontent.com/gugahdl/Bible-API/main/logo.png" width="120" alt="Open book">
 </p>
 

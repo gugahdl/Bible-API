@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Versículo do Dia",
+        "description": "Informe a App Key da Plataforma YouVersion. Crie uma conta de desenvolvedor gratuita e registre um aplicativo em https://developers.youversion.com para obter uma, e escolha o idioma em que as versões da Bíblia devem ser listadas. Você escolhe a(s) versão(ões) na próxima tela — a App Key só é pedida aqui, uma vez.",
+        "data": {
+          "app_key": "App Key",
+          "language": "Idioma"
+        }
+      },
+      "select": {
+        "title": "Versão(ões) da Bíblia",
+        "description": "Escolha uma ou mais versões da Bíblia para acompanhar. A lista mostra as versões habilitadas para a sua App Key no idioma selecionado. Cada versão vira um dispositivo com seu próprio sensor de Versículo do Dia. Depois dá pra adicionar ou remover versões pelo botão Configurar desta integração, sem digitar a App Key de novo.",
+        "data": {
+          "version": "Versão(ões) da Bíblia"
+        }
+      }
+    },
+    "error": {
+      "invalid_app_key": "App Key da YouVersion inválida.",
+      "invalid_version": "A versão da Bíblia selecionada não é válida.",
+      "cannot_connect": "Não foi possível conectar à API da YouVersion.",
+      "no_versions": "Nenhuma versão da Bíblia foi retornada para esta App Key e idioma. Tente outro código de idioma.",
+      "no_selection": "Escolha pelo menos uma versão da Bíblia.",
+      "version_in_use": "Uma das versões selecionadas já está sendo acompanhada por outra entrada. Remova-a de lá primeiro, ou escolha outra versão aqui."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Versículo do Dia",
+        "description": "Adicione, remova ou altere as versões da Bíblia (e o idioma) acompanhadas por esta entrada. A App Key continua a mesma — não precisa digitar de novo.",
+        "data": {
+          "version": "Versão(ões) da Bíblia",
+          "language": "Idioma"
+        }
+      }
+    },
+    "error": {
+      "invalid_app_key": "A App Key armazenada não é mais válida.",
+      "invalid_version": "A versão da Bíblia selecionada não é válida.",
+      "cannot_connect": "Não foi possível conectar à API da YouVersion.",
+      "no_selection": "Escolha pelo menos uma versão da Bíblia.",
+      "version_in_use": "Uma das versões selecionadas já está sendo acompanhada por outra entrada. Remova-a de lá primeiro, ou escolha outra versão aqui."
+    }
+  }
+}

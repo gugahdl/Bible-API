@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Versículo do Dia",
-        "description": "Informe a sua App Key. Crie uma conta de desenvolvedor gratuita e registre um aplicativo em https://developers.youversion.com para obter uma, e escolha o idioma em que as versões da Bíblia devem ser listadas. Você escolhe a(s) versão(ões) na próxima tela — a App Key só é pedida aqui, uma vez.",
+        "description": "Informe a sua App Key. Crie uma conta de desenvolvedor gratuita e registre um aplicativo em {portal_url} para obter uma, e escolha o idioma em que as versões da Bíblia devem ser listadas. Você escolhe a(s) versão(ões) na próxima tela — a App Key só é pedida aqui, uma vez.",
         "data": {
           "app_key": "App Key",
           "language": "Idioma"
@@ -18,7 +18,7 @@
       },
       "reauth_confirm": {
         "title": "Nova App Key necessária",
-        "description": "A API da Bíblia não aceita mais a App Key salva nesta entrada. Informe uma App Key válida de https://developers.youversion.com. As versões acompanhadas são mantidas.",
+        "description": "A API da Bíblia não aceita mais a App Key salva nesta entrada. Informe uma App Key válida de {portal_url}. As versões acompanhadas são mantidas.",
         "data": {
           "app_key": "App Key"
         }

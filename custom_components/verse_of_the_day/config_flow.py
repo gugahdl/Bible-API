@@ -51,6 +51,10 @@ from .helpers import entry_version_names, entry_versions, versions_tracked_elsew
 
 _LOGGER = logging.getLogger(__name__)
 
+# Where users get an App Key. Passed as a placeholder because Home Assistant
+# does not allow URLs inside translation strings.
+_PLACEHOLDERS = {"portal_url": "https://developers.youversion.com"}
+
 
 def _key_unique_id(app_key: str) -> str:
     """Return a non-reversible id for an App Key, used as the entry's unique id.
@@ -208,7 +212,10 @@ class VerseOfTheDayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
         )
         return self.async_show_form(
-            step_id="user", data_schema=schema, errors=errors
+            step_id="user",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders=_PLACEHOLDERS,
         )
 
     async def async_step_select(
@@ -299,6 +306,7 @@ class VerseOfTheDayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=vol.Schema({vol.Required(CONF_APP_KEY): str}),
             errors=errors,
+            description_placeholders=_PLACEHOLDERS,
         )
 
     @staticmethod

@@ -29,6 +29,7 @@ async def _start(hass: HomeAssistant, app_key: str = APP_KEY):
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
+    assert result["description_placeholders"]["portal_url"].startswith("https://")
     return await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_APP_KEY: f"  {app_key} ", CONF_LANGUAGE: "por"}
     )

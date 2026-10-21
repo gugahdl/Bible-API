@@ -1,13 +1,13 @@
 {
   "domain": "verse_of_the_day",
   "name": "Bible Verse of the Day",
-  "version": "3.0.0",
-  "config_flow": true,
-  "documentation": "https://github.com/gugahdl/Bible-API",
-  "issue_tracker": "https://github.com/gugahdl/Bible-API/issues",
-  "dependencies": [],
-  "requirements": [],
   "codeowners": ["@gugahdl"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/gugahdl/Bible-API",
+  "integration_type": "service",
   "iot_class": "cloud_polling",
-  "integration_type": "hub"
+  "issue_tracker": "https://github.com/gugahdl/Bible-API/issues",
+  "requirements": [],
+  "version": "3.1.0"
 }

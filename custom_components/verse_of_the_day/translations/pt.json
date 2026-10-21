@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Versículo do Dia",
-        "description": "Informe a App Key da Plataforma YouVersion. Crie uma conta de desenvolvedor gratuita e registre um aplicativo em https://developers.youversion.com para obter uma, e escolha o idioma em que as versões da Bíblia devem ser listadas. Você escolhe a(s) versão(ões) na próxima tela — a App Key só é pedida aqui, uma vez.",
+        "description": "Informe a sua App Key. Crie uma conta de desenvolvedor gratuita e registre um aplicativo em {portal_url} para obter uma, e escolha o idioma em que as versões da Bíblia devem ser listadas. Você escolhe a(s) versão(ões) na próxima tela — a App Key só é pedida aqui, uma vez.",
         "data": {
           "app_key": "App Key",
           "language": "Idioma"
@@ -15,15 +15,28 @@
         "data": {
           "version": "Versão(ões) da Bíblia"
         }
+      },
+      "reauth_confirm": {
+        "title": "Nova App Key necessária",
+        "description": "A API da Bíblia não aceita mais a App Key salva nesta entrada. Informe uma App Key válida de {portal_url}. As versões acompanhadas são mantidas.",
+        "data": {
+          "app_key": "App Key"
+        }
       }
     },
     "error": {
-      "invalid_app_key": "App Key da YouVersion inválida.",
-      "invalid_version": "A versão da Bíblia selecionada não é válida.",
-      "cannot_connect": "Não foi possível conectar à API da YouVersion.",
-      "no_versions": "Nenhuma versão da Bíblia foi retornada para esta App Key e idioma. Tente outro código de idioma.",
+      "invalid_app_key": "App Key inválida.",
+      "forbidden": "A App Key foi reconhecida, mas não tem permissão para listar Bíblias. Confira no portal de desenvolvedor se o aplicativo está ativo e se você aceitou a licença de pelo menos uma versão da Bíblia.",
+      "rate_limited": "Muitas requisições para esta App Key agora. Espere alguns minutos e tente de novo.",
+      "cannot_connect": "Não foi possível conectar à API da Bíblia.",
+      "no_versions": "Nenhuma versão da Bíblia foi retornada para esta App Key e idioma. Tente outro código de idioma, ou habilite mais Bíblias para o seu aplicativo no portal de desenvolvedor.",
       "no_selection": "Escolha pelo menos uma versão da Bíblia.",
       "version_in_use": "Uma das versões selecionadas já está sendo acompanhada por outra entrada. Remova-a de lá primeiro, ou escolha outra versão aqui."
+    },
+    "abort": {
+      "already_configured": "Esta App Key já está configurada. Use o botão Configurar dessa entrada para adicionar mais versões.",
+      "reauth_successful": "App Key atualizada.",
+      "already_in_progress": "A configuração desta App Key já está em andamento."
     }
   },
   "options": {
@@ -39,10 +52,12 @@
     },
     "error": {
       "invalid_app_key": "A App Key armazenada não é mais válida.",
-      "invalid_version": "A versão da Bíblia selecionada não é válida.",
-      "cannot_connect": "Não foi possível conectar à API da YouVersion.",
+      "forbidden": "A App Key foi reconhecida, mas não tem permissão para listar Bíblias. Confira no portal de desenvolvedor se o aplicativo está ativo e se você aceitou a licença de pelo menos uma versão da Bíblia.",
+      "rate_limited": "Muitas requisições para esta App Key agora. Espere alguns minutos e tente de novo.",
+      "cannot_connect": "Não foi possível conectar à API da Bíblia.",
       "no_selection": "Escolha pelo menos uma versão da Bíblia.",
-      "version_in_use": "Uma das versões selecionadas já está sendo acompanhada por outra entrada. Remova-a de lá primeiro, ou escolha outra versão aqui."
+      "version_in_use": "Uma das versões selecionadas já está sendo acompanhada por outra entrada. Remova-a de lá primeiro, ou escolha outra versão aqui.",
+      "language_changed": "A lista de versões foi atualizada para o novo idioma. Revise a seleção e envie de novo."
     }
   }
 }

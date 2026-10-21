@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Bible Verse of the Day",
-        "description": "Enter your YouVersion Platform App Key. Create a free developer account and register an application at https://developers.youversion.com to get one, then pick the language you want Bible versions listed in. You'll pick the version(s) to track on the next screen -- you only enter the App Key here, once.",
+        "description": "Enter your App Key. Create a free developer account and register an application at https://developers.youversion.com to get one, then pick the language you want Bible versions listed in. You'll pick the version(s) to track on the next screen -- you only enter the App Key here, once.",
         "data": {
           "app_key": "App Key",
           "language": "Language"
@@ -15,15 +15,28 @@
         "data": {
           "version": "Bible version(s)"
         }
+      },
+      "reauth_confirm": {
+        "title": "New App Key needed",
+        "description": "The Bible API no longer accepts the App Key stored for this entry. Enter a valid App Key from https://developers.youversion.com. Your tracked versions are kept.",
+        "data": {
+          "app_key": "App Key"
+        }
       }
     },
     "error": {
-      "invalid_app_key": "Invalid YouVersion App Key.",
-      "invalid_version": "The selected Bible version is not valid.",
-      "cannot_connect": "Could not connect to the YouVersion API.",
-      "no_versions": "No Bible versions were returned for this App Key and language. Try a different language code.",
+      "invalid_app_key": "Invalid App Key.",
+      "forbidden": "The App Key was recognized but is not allowed to list Bibles. Check on the developer portal that the app is active and that you accepted the license of at least one Bible version.",
+      "rate_limited": "Too many requests for this App Key right now. Wait a few minutes and try again.",
+      "cannot_connect": "Could not connect to the Bible API.",
+      "no_versions": "No Bible versions were returned for this App Key and language. Try a different language code, or enable more Bibles for your app on the developer portal.",
       "no_selection": "Pick at least one Bible version.",
       "version_in_use": "One of the selected versions is already tracked by another entry. Remove it there first, or pick a different version here."
+    },
+    "abort": {
+      "already_configured": "This App Key is already configured. Use that entry's Configure button to add more versions.",
+      "reauth_successful": "App Key updated.",
+      "already_in_progress": "Setup for this App Key is already in progress."
     }
   },
   "options": {
@@ -39,10 +52,12 @@
     },
     "error": {
       "invalid_app_key": "The stored App Key is no longer valid.",
-      "invalid_version": "The selected Bible version is not valid.",
-      "cannot_connect": "Could not connect to the YouVersion API.",
+      "forbidden": "The App Key was recognized but is not allowed to list Bibles. Check on the developer portal that the app is active and that you accepted the license of at least one Bible version.",
+      "rate_limited": "Too many requests for this App Key right now. Wait a few minutes and try again.",
+      "cannot_connect": "Could not connect to the Bible API.",
       "no_selection": "Pick at least one Bible version.",
-      "version_in_use": "One of the selected versions is already tracked by another entry. Remove it there first, or pick a different version here."
+      "version_in_use": "One of the selected versions is already tracked by another entry. Remove it there first, or pick a different version here.",
+      "language_changed": "The version list was updated for the new language. Review your selection and submit again."
     }
   }
 }

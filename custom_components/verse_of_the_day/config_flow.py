@@ -1,18 +1,19 @@
 """Config flow for the Bible Verse of the Day integration.
 
-One entry holds one App Key (from the YouVersion Platform API) and can track
-several Bible versions at once -- the App Key is entered once
-(async_step_user) and versions are picked with a multi-select
-(async_step_select). Add or remove versions later from the entry's
-"Configure" (options) without touching the App Key again.
+One entry holds one App Key and can track several Bible versions at once --
+the App Key is entered once (async_step_user) and versions are picked with a
+multi-select (async_step_select). Add or remove versions later from the
+entry's "Configure" (options) without touching the App Key again. If the key
+stops working, Home Assistant asks for a new one (async_step_reauth).
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
+import hashlib
 import logging
 from typing import Any
 
 import voluptuous as vol
-from aiohttp import ClientError
 
 from homeassistant import config_entries
 from homeassistant.config_entries import (
@@ -28,87 +29,57 @@ from homeassistant.helpers.selector import (
     SelectSelectorMode,
 )
 
+from .api import (
+    ApiAuthError,
+    ApiError,
+    ApiForbiddenError,
+    ApiRateLimitError,
+    BibleApiClient,
+)
 from .const import (
-    API_BASE_URL,
-    API_KEY_HEADER,
-    API_USER_AGENT,
-    COMMON_LANGUAGES,
     CONF_APP_KEY,
     CONF_LANGUAGE,
     CONF_VERSION,
     CONF_VERSION_NAMES,
     CONF_VERSIONS,
+    COMMON_LANGUAGES,
     DEFAULT_LANGUAGE_RANGE,
     DEFAULT_VERSION_ID,
     DOMAIN,
 )
-from .helpers import entry_versions, versions_tracked_elsewhere
+from .helpers import entry_version_names, entry_versions, versions_tracked_elsewhere
 
 _LOGGER = logging.getLogger(__name__)
 
-_MAX_BIBLE_PAGES = 20
-_PAGE_SIZE = 99
 
+def _key_unique_id(app_key: str) -> str:
+    """Return a non-reversible id for an App Key, used as the entry's unique id.
 
-class InvalidAuth(Exception):
-    """Raised when the YouVersion API rejects the app key."""
-
-
-class CannotConnect(Exception):
-    """Raised when the YouVersion API cannot be reached."""
+    The key itself is a secret, so only a hash of it is stored there.
+    """
+    return hashlib.sha256(app_key.encode()).hexdigest()[:16]
 
 
 async def _fetch_bibles(
     hass: HomeAssistant, app_key: str, language_range: str
-) -> list[dict[str, Any]]:
-    """Return the list of Bibles enabled for this app key in ``language_range``.
+) -> tuple[list[dict[str, Any]], str | None]:
+    """Return ``(bibles, error_key)`` for this App Key and language.
 
-    Calls ``GET /v1/bibles`` on the YouVersion Platform API, following
-    ``next_page_token`` pagination.
+    ``error_key`` is the translation key of the form error to show, or None.
     """
-    session = aiohttp_client.async_get_clientsession(hass)
-    headers = {
-        API_KEY_HEADER: app_key,
-        "Accept": "application/json",
-        "User-Agent": API_USER_AGENT,
-    }
-
-    bibles: list[dict[str, Any]] = []
-    page_token: str | None = None
-
-    for _ in range(_MAX_BIBLE_PAGES):
-        params: list[tuple[str, str]] = [
-            ("language_ranges[]", language_range),
-            ("page_size", str(_PAGE_SIZE)),
-        ]
-        if page_token:
-            params.append(("page_token", page_token))
-
-        try:
-            async with session.get(
-                f"{API_BASE_URL}/bibles", headers=headers, params=params
-            ) as resp:
-                if resp.status in (401, 403):
-                    raise InvalidAuth
-                if resp.status >= 400:
-                    text = await resp.text()
-                    _LOGGER.warning(
-                        "Unexpected status %s from YouVersion /bibles: %s",
-                        resp.status,
-                        text[:300],
-                    )
-                    raise CannotConnect
-                body = await resp.json()
-        except ClientError as err:
-            _LOGGER.warning("Error contacting YouVersion API: %s", err)
-            raise CannotConnect from err
-
-        bibles.extend(body.get("data") or [])
-        page_token = body.get("next_page_token")
-        if not page_token:
-            break
-
-    return bibles
+    client = BibleApiClient(aiohttp_client.async_get_clientsession(hass), app_key)
+    try:
+        return await client.async_get_bibles(language_range), None
+    except ApiAuthError:
+        return [], "invalid_app_key"
+    except ApiForbiddenError as err:
+        _LOGGER.warning("App Key recognized but not permitted: %s", err)
+        return [], "forbidden"
+    except ApiRateLimitError:
+        return [], "rate_limited"
+    except ApiError as err:
+        _LOGGER.warning("Error contacting the Bible API: %s", err)
+        return [], "cannot_connect"
 
 
 def _bible_label(bible: dict[str, Any]) -> str:
@@ -161,6 +132,27 @@ def _language_options() -> list[dict[str, str]]:
     ]
 
 
+def _language_selector() -> SelectSelector:
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=_language_options(),
+            mode=SelectSelectorMode.DROPDOWN,
+            custom_value=True,
+        )
+    )
+
+
+def _versions_selector(options: list[dict[str, str]]) -> SelectSelector:
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=options,
+            mode=SelectSelectorMode.DROPDOWN,
+            multiple=True,
+            custom_value=False,
+        )
+    )
+
+
 def _parse_selected_versions(raw: Any) -> list[int] | None:
     """Parse the multi-select's raw value into a sorted list of ints, or None."""
     if not raw:
@@ -193,33 +185,26 @@ class VerseOfTheDayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             language = (
                 user_input[CONF_LANGUAGE].strip() or DEFAULT_LANGUAGE_RANGE
             )
-            try:
-                bibles = await _fetch_bibles(self.hass, app_key, language)
-            except InvalidAuth:
-                errors["base"] = "invalid_app_key"
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
+            await self.async_set_unique_id(_key_unique_id(app_key))
+            self._abort_if_unique_id_configured()
+
+            bibles, error = await _fetch_bibles(self.hass, app_key, language)
+            if error:
+                errors["base"] = error
+            elif not bibles:
+                errors["base"] = "no_versions"
             else:
-                if not bibles:
-                    errors["base"] = "no_versions"
-                else:
-                    self._app_key = app_key
-                    self._language = language
-                    self._bibles = bibles
-                    return await self.async_step_select()
+                self._app_key = app_key
+                self._language = language
+                self._bibles = bibles
+                return await self.async_step_select()
 
         schema = vol.Schema(
             {
                 vol.Required(CONF_APP_KEY): str,
                 vol.Required(
                     CONF_LANGUAGE, default=DEFAULT_LANGUAGE_RANGE
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=_language_options(),
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=True,
-                    )
-                ),
+                ): _language_selector(),
             }
         )
         return self.async_show_form(
@@ -238,7 +223,7 @@ class VerseOfTheDayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             in_use = versions_tracked_elsewhere(self.hass) if version_ids else set()
             if version_ids is None:
                 errors["base"] = "no_selection"
-            elif version_ids and (dupes := set(version_ids) & in_use):
+            elif dupes := set(version_ids) & in_use:
                 errors["base"] = "version_in_use"
                 _LOGGER.debug("Versions already tracked elsewhere: %s", dupes)
             else:
@@ -270,18 +255,50 @@ class VerseOfTheDayConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(
                     CONF_VERSION, default=default_versions
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=version_options,
-                        mode=SelectSelectorMode.DROPDOWN,
-                        multiple=True,
-                        custom_value=False,
-                    )
-                )
+                ): _versions_selector(version_options)
             }
         )
         return self.async_show_form(
             step_id="select", data_schema=schema, errors=errors
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Start re-authentication after the API rejected the stored App Key."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask for a new App Key and validate it."""
+        errors: dict[str, str] = {}
+        entry = self._get_reauth_entry()
+
+        if user_input is not None:
+            app_key = user_input[CONF_APP_KEY].strip()
+            unique_id = _key_unique_id(app_key)
+            if any(
+                other.unique_id == unique_id and other.entry_id != entry.entry_id
+                for other in self._async_current_entries(include_ignore=False)
+            ):
+                return self.async_abort(reason="already_configured")
+
+            language = entry.options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE_RANGE)
+            _, error = await _fetch_bibles(self.hass, app_key, language)
+            if error:
+                errors["base"] = error
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    unique_id=unique_id,
+                    data_updates={CONF_APP_KEY: app_key},
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_APP_KEY): str}),
+            errors=errors,
         )
 
     @staticmethod
@@ -297,17 +314,20 @@ class VerseOfTheDayOptionsFlow(OptionsFlow):
     def __init__(self) -> None:
         """Initialize options flow."""
         self._bibles: list[dict[str, Any]] = []
+        self._language: str | None = None
+        self._selected: list[int] | None = None
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Show a multi-select of versions fetched live from the API."""
         errors: dict[str, str] = {}
-
         current_versions = entry_versions(self.config_entry)
-        current_language = self.config_entry.options.get(
-            CONF_LANGUAGE, DEFAULT_LANGUAGE_RANGE
-        )
+        known_names = entry_version_names(self.config_entry)
+        if self._language is None:
+            self._language = self.config_entry.options.get(
+                CONF_LANGUAGE, DEFAULT_LANGUAGE_RANGE
+            )
 
         if user_input is not None:
             language = (
@@ -317,7 +337,14 @@ class VerseOfTheDayOptionsFlow(OptionsFlow):
             in_use = versions_tracked_elsewhere(
                 self.hass, exclude_entry_id=self.config_entry.entry_id
             )
-            if version_ids is None:
+            if language != self._language:
+                # The list on screen belongs to the old language: load the
+                # new language's versions and show the form again.
+                self._language = language
+                self._bibles = []
+                self._selected = version_ids or current_versions
+                errors["base"] = "language_changed"
+            elif version_ids is None:
                 errors["base"] = "no_selection"
             elif dupes := set(version_ids) & in_use:
                 errors["base"] = "version_in_use"
@@ -328,7 +355,7 @@ class VerseOfTheDayOptionsFlow(OptionsFlow):
                     str(vid): (
                         _bible_short_label(by_id[vid])
                         if vid in by_id
-                        else str(vid)
+                        else known_names.get(vid, str(vid))
                     )
                     for vid in version_ids
                 }
@@ -342,49 +369,36 @@ class VerseOfTheDayOptionsFlow(OptionsFlow):
                 )
 
         if not self._bibles:
-            try:
-                self._bibles = await _fetch_bibles(
-                    self.hass,
-                    self.config_entry.data[CONF_APP_KEY],
-                    current_language,
-                )
-            except InvalidAuth:
-                errors["base"] = "invalid_app_key"
-            except CannotConnect:
-                errors["base"] = "cannot_connect"
+            self._bibles, error = await _fetch_bibles(
+                self.hass, self.config_entry.data[CONF_APP_KEY], self._language
+            )
+            if error:
+                errors["base"] = error
 
         version_options = _build_version_options(self._bibles)
+        selected = self._selected if self._selected is not None else current_versions
 
-        # If the fetch failed, still show the currently tracked versions so
-        # the user isn't fully locked out (they just can't add new ones now).
+        # Keep already-selected versions on the list even when the fetch
+        # failed or they belong to another language, so they can still be
+        # kept or deselected.
         known_values = {opt["value"] for opt in version_options}
-        for version_id in current_versions:
+        for version_id in selected:
             if str(version_id) not in known_values:
                 version_options.append(
-                    {"value": str(version_id), "label": f"ID {version_id}"}
+                    {
+                        "value": str(version_id),
+                        "label": known_names.get(version_id, f"ID {version_id}"),
+                    }
                 )
 
         schema = vol.Schema(
             {
                 vol.Required(
-                    CONF_VERSION, default=[str(v) for v in current_versions]
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=version_options,
-                        mode=SelectSelectorMode.DROPDOWN,
-                        multiple=True,
-                        custom_value=False,
-                    )
-                ),
+                    CONF_VERSION, default=[str(v) for v in selected]
+                ): _versions_selector(version_options),
                 vol.Required(
-                    CONF_LANGUAGE, default=current_language
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=_language_options(),
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=True,
-                    )
-                ),
+                    CONF_LANGUAGE, default=self._language
+                ): _language_selector(),
             }
         )
 
